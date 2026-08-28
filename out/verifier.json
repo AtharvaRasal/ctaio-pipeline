@@ -1,0 +1,54 @@
+{
+  "results": [
+    {
+      "id": 0,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim's framing as closing a redirect/replace escape does not overstate it."
+    },
+    {
+      "id": 1,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; describing it as a TOCTOU fix accurately characterizes the described behavior."
+    },
+    {
+      "id": 2,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim accurately describes the path-traversal fix for marketplace plugin commands."
+    },
+    {
+      "id": 3,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim correctly notes this applies to managed/project settings sources."
+    },
+    {
+      "id": 4,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim correctly states agent model: and per-spawn model now take precedence."
+    },
+    {
+      "id": 5,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim accurately describes per-model effort persistence."
+    },
+    {
+      "id": 6,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim accurately summarizes the restricted flag's effects."
+    },
+    {
+      "id": 7,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim correctly notes it applies when no subagent TTL setting is configured."
+    },
+    {
+      "id": 8,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim's added context about it being live before 2.1.248 is a reasonable inference from the fix description, not an overstatement."
+    },
+    {
+      "id": 9,
+      "verdict": "supported",
+      "reason": "Cite matches changelog verbatim; claim accurately restates the cache-miss and thinking-context loss cause."
+    }
+  ]
+}

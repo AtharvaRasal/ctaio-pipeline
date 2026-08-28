@@ -1,0 +1,60 @@
+{
+  "title": "Claude Code 2.1.248–2.1.251: sandbox hardening, a lockdown flag, and an hourly cache-miss fix",
+  "tldr": [
+    "2.1.251 is mostly a security patch round: symlink TOCTOU in file tools, plugin path traversal, and sandboxed Bash output files all get closed off, plus new approval gates on custom headers and gateway-adjacent settings.",
+    "2.1.248 adds `--restricted` for locking a session down to file-only tools, per-agent prompt-cache TTLs, and stops uploading uncommitted secrets (`.env`, `.tfvars`, key backups) to `/ultrareview` and cloud sessions.",
+    "2.1.250 shipped no user-facing changes — changelog just says 'Bug fixes and reliability improvements.'"
+  ],
+  "items": [
+    {
+      "heading": "Sandboxed Bash can no longer swap its own output file",
+      "why_it_matters": "If you rely on the sandbox as an actual trust boundary rather than a suggestion, this closes a redirect/replace escape on command output — worth knowing if you were treating sandboxed output as untrusted-but-contained before.",
+      "cite": "Changed how Bash command output files are created and read back when commands run in the sandbox, so a sandboxed command cannot redirect or replace them"
+    },
+    {
+      "heading": "Symlink-swap TOCTOU in Read/Write/Edit fixed",
+      "why_it_matters": "A permission check that approves a path, followed by a symlink swap before the actual read/write, is a classic TOCTOU — this closes it for the three core file tools, relevant if agents run in directories a concurrent process can touch.",
+      "cite": "Fixed file tools (Read, Write, Edit) following a symlink swapped inside the working directory after the permission check, which could read or write outside the approved location"
+    },
+    {
+      "heading": "Plugin marketplace commands can't point outside the plugin dir",
+      "why_it_matters": "If you install third-party plugins from marketplaces, this is the fix that stops a malicious/misconfigured entry from referencing files outside its own directory — a path-traversal class bug, now a hard error instead of silent execution.",
+      "cite": "Fixed plugin commands declared in a marketplace entry being able to point outside the plugin directory; such paths are now rejected with a path-traversal error"
+    },
+    {
+      "heading": "Custom headers that carry credentials now require approval",
+      "why_it_matters": "If your org sets `ANTHROPIC_CUSTOM_HEADERS` via managed or project settings, an `Authorization` or `Host` override used to apply silently; now it prompts. Anticipate an approval dialog next time this setting changes.",
+      "cite": "Changed `ANTHROPIC_CUSTOM_HEADERS` from managed or project settings to require approval when it sets a credential, org/tenant, routing, or API-behavior header (e.g. `Authorization`, `Host`)"
+    },
+    {
+      "heading": "CLAUDE_CODE_SUBAGENT_MODEL is now a default, not an override",
+      "why_it_matters": "If you set this env var expecting it to force every subagent onto one model, it no longer wins over an agent's own `model:` field or a per-spawn model — check your fleet configs if you were depending on the old override behavior.",
+      "cite": "Changed `CLAUDE_CODE_SUBAGENT_MODEL` to set the default subagent model rather than override everything: an agent definition's `model:` and an explicit per-spawn model now take precedence over it"
+    },
+    {
+      "heading": "`/effort` is now saved per model",
+      "why_it_matters": "Switching between models used to carry one global effort setting; now each model remembers its own, useful if you run Opus at max effort but keep Sonnet lighter.",
+      "cite": "Changed `/effort` to save your default effort level per model, so each model keeps its own setting when you switch"
+    },
+    {
+      "heading": "`--restricted` flag locks a session to file tools only",
+      "why_it_matters": "First real one-flag way to run an agent with no Bash/code-exec/WebFetch and no bypass-permissions escape hatch — the obvious choice for running an untrusted prompt or a CI job that should only touch files.",
+      "cite": "Added `--restricted` (or `CLAUDE_CODE_RESTRICTED=1`): removes the built-in tools that run commands or code and `WebFetch` (unless named in `--tools`), keeps file tools inside the working directory, refuses `bypassPermissions`, and ignores user, project and local settings files"
+    },
+    {
+      "heading": "Per-agent prompt-cache TTL in frontmatter",
+      "why_it_matters": "Lets a specific subagent definition opt into a 5m or 1h cache TTL without touching global subagent TTL settings — relevant if some of your agents are long-running and others are short, bursty calls that shouldn't hold a 1h cache.",
+      "cite": "Added `experimental.cacheTtl` (`\"5m\"` or `\"1h\"`) to agent frontmatter: a per-agent prompt cache TTL used when no subagent TTL setting is configured"
+    },
+    {
+      "heading": "Uncommitted secrets no longer leak into ultrareview/cloud uploads",
+      "why_it_matters": "Previously, uncommitted `.env`/`.tfvars` edits and even editor swap/temp/backup files (`key.pem.tmp`, `id_rsa.swo`) could get shipped along with `/ultrareview` or a seeded cloud session. If you've run ultrareview on a repo with local secret files, this was live before 2.1.248.",
+      "cite": "Fixed `/ultrareview` and locally seeded cloud sessions uploading uncommitted edits to `prod.env`-style and `*.tfvars` files, or to editor swap, temp, and backup copies of credential files (e.g. `key.pem.tmp`, `id_rsa.swo`); they now stay on your machine"
+    },
+    {
+      "heading": "Hourly prompt-cache miss in long sessions fixed",
+      "why_it_matters": "Long-running sessions were silently eating a full cache miss (and losing extended-thinking context) roughly every hour due to tool definitions re-rendering after OAuth token refresh — a real cost/latency bug if you keep sessions open for hours.",
+      "cite": "Fixed a prompt-cache miss (and lost extended-thinking context) roughly once an hour in long sessions, caused by tool definitions being re-rendered after an OAuth token refresh"
+    }
+  ]
+}
