@@ -1,6 +1,158 @@
-<!doctype html><meta charset=utf-8><title>Claude Code 2.1.248–2.1.251: sandbox hardening, a lockdown flag, and an hourly cache-miss fix</title>
-<style>body{max-width:720px;margin:40px auto;font:16px/1.5 system-ui;padding:0 16px}blockquote{color:#555;border-left:3px solid #ddd;margin:4px 0 0;padding-left:10px;font-size:14px}small{color:#777}</style>
-<h1>Claude Code 2.1.248–2.1.251: sandbox hardening, a lockdown flag, and an hourly cache-miss fix</h1><small>Auto-generated 2026-08-28 · 10 claims, each fact-checked against the source by a second agent · 0 dropped</small>
-<ul><li>2.1.251 is mostly a security patch round: symlink TOCTOU in file tools, plugin path traversal, and sandboxed Bash output files all get closed off, plus new approval gates on custom headers and gateway-adjacent settings.</li><li>2.1.248 adds `--restricted` for locking a session down to file-only tools, per-agent prompt-cache TTLs, and stops uploading uncommitted secrets (`.env`, `.tfvars`, key backups) to `/ultrareview` and cloud sessions.</li><li>2.1.250 shipped no user-facing changes — changelog just says 'Bug fixes and reliability improvements.'</li></ul>
-<h3>Sandboxed Bash can no longer swap its own output file</h3><p>If you rely on the sandbox as an actual trust boundary rather than a suggestion, this closes a redirect/replace escape on command output — worth knowing if you were treating sandboxed output as untrusted-but-contained before.</p><blockquote>Changed how Bash command output files are created and read back when commands run in the sandbox, so a sandboxed command cannot redirect or replace them</blockquote><h3>Symlink-swap TOCTOU in Read/Write/Edit fixed</h3><p>A permission check that approves a path, followed by a symlink swap before the actual read/write, is a classic TOCTOU — this closes it for the three core file tools, relevant if agents run in directories a concurrent process can touch.</p><blockquote>Fixed file tools (Read, Write, Edit) following a symlink swapped inside the working directory after the permission check, which could read or write outside the approved location</blockquote><h3>Plugin marketplace commands can't point outside the plugin dir</h3><p>If you install third-party plugins from marketplaces, this is the fix that stops a malicious/misconfigured entry from referencing files outside its own directory — a path-traversal class bug, now a hard error instead of silent execution.</p><blockquote>Fixed plugin commands declared in a marketplace entry being able to point outside the plugin directory; such paths are now rejected with a path-traversal error</blockquote><h3>Custom headers that carry credentials now require approval</h3><p>If your org sets `ANTHROPIC_CUSTOM_HEADERS` via managed or project settings, an `Authorization` or `Host` override used to apply silently; now it prompts. Anticipate an approval dialog next time this setting changes.</p><blockquote>Changed `ANTHROPIC_CUSTOM_HEADERS` from managed or project settings to require approval when it sets a credential, org/tenant, routing, or API-behavior header (e.g. `Authorization`, `Host`)</blockquote><h3>CLAUDE_CODE_SUBAGENT_MODEL is now a default, not an override</h3><p>If you set this env var expecting it to force every subagent onto one model, it no longer wins over an agent's own `model:` field or a per-spawn model — check your fleet configs if you were depending on the old override behavior.</p><blockquote>Changed `CLAUDE_CODE_SUBAGENT_MODEL` to set the default subagent model rather than override everything: an agent definition's `model:` and an explicit per-spawn model now take precedence over it</blockquote><h3>`/effort` is now saved per model</h3><p>Switching between models used to carry one global effort setting; now each model remembers its own, useful if you run Opus at max effort but keep Sonnet lighter.</p><blockquote>Changed `/effort` to save your default effort level per model, so each model keeps its own setting when you switch</blockquote><h3>`--restricted` flag locks a session to file tools only</h3><p>First real one-flag way to run an agent with no Bash/code-exec/WebFetch and no bypass-permissions escape hatch — the obvious choice for running an untrusted prompt or a CI job that should only touch files.</p><blockquote>Added `--restricted` (or `CLAUDE_CODE_RESTRICTED=1`): removes the built-in tools that run commands or code and `WebFetch` (unless named in `--tools`), keeps file tools inside the working directory, refuses `bypassPermissions`, and ignores user, project and local settings files</blockquote><h3>Per-agent prompt-cache TTL in frontmatter</h3><p>Lets a specific subagent definition opt into a 5m or 1h cache TTL without touching global subagent TTL settings — relevant if some of your agents are long-running and others are short, bursty calls that shouldn't hold a 1h cache.</p><blockquote>Added `experimental.cacheTtl` (`"5m"` or `"1h"`) to agent frontmatter: a per-agent prompt cache TTL used when no subagent TTL setting is configured</blockquote><h3>Uncommitted secrets no longer leak into ultrareview/cloud uploads</h3><p>Previously, uncommitted `.env`/`.tfvars` edits and even editor swap/temp/backup files (`key.pem.tmp`, `id_rsa.swo`) could get shipped along with `/ultrareview` or a seeded cloud session. If you've run ultrareview on a repo with local secret files, this was live before 2.1.248.</p><blockquote>Fixed `/ultrareview` and locally seeded cloud sessions uploading uncommitted edits to `prod.env`-style and `*.tfvars` files, or to editor swap, temp, and backup copies of credential files (e.g. `key.pem.tmp`, `id_rsa.swo`); they now stay on your machine</blockquote><h3>Hourly prompt-cache miss in long sessions fixed</h3><p>Long-running sessions were silently eating a full cache miss (and losing extended-thinking context) roughly every hour due to tool definitions re-rendering after OAuth token refresh — a real cost/latency bug if you keep sessions open for hours.</p><blockquote>Fixed a prompt-cache miss (and lost extended-thinking context) roughly once an hour in long sessions, caused by tool definitions being re-rendered after an OAuth token refresh</blockquote>
-<p><small>Pipeline: fetch → writer agent → verifier agent → code gate → publish. Source: <a href="https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md">CHANGELOG.md</a></small></p>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Claude Code 2.1.248–2.1.251: sandbox hardening, a lockdown flag, and an hourly cache-miss fix</title>
+<meta name="description" content="2.1.251 is mostly a security patch round: symlink TOCTOU in file tools, plugin path traversal, and sandboxed Bash output files all get closed off, plus new approval gates on custom headers and gateway-adjacent settings.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+:root{--bg:#f4f6f8;--paper:#ffffff;--ink:#141a21;--ink2:#5b6672;--rule:#d9dee5;--accent:#1d4f91;--accent-bg:#e3ebf7;--ok:#1a7f4b;--ok-bg:#dcf2e4;--bad:#b3261e;--bad-bg:#f9e0de;--mono:"IBM Plex Mono",Consolas,monospace;--body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1419;--paper:#171e26;--ink:#e8edf2;--ink2:#9fadbb;--rule:#2b3642;--accent:#8ab8f2;--accent-bg:#1b2b42;--ok:#6fd39a;--ok-bg:#17302a;--bad:#f09a93;--bad-bg:#3d1f1d;color-scheme:dark}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 var(--body);padding:0 max(16px,env(safe-area-inset-left)) 64px max(16px,env(safe-area-inset-right))}
+.wrap{max-width:760px;margin:0 auto}
+header{padding:44px 0 22px;border-bottom:2px solid var(--ink)}
+.eyebrow{font:12px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.12;letter-spacing:-.015em;margin:10px 0 14px;text-wrap:balance}
+.meta{display:flex;flex-wrap:wrap;gap:8px;font:12.5px/1.4 var(--mono)}
+.meta span{border:1px solid var(--rule);background:var(--paper);padding:3px 9px;border-radius:3px}
+.meta .ok{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
+.meta .bad{border-color:var(--bad);color:var(--bad);background:var(--bad-bg)}
+.tldr{background:var(--paper);border:1px solid var(--rule);border-left:4px solid var(--accent);padding:16px 20px;margin:26px 0 10px}
+.tldr .eyebrow{margin-bottom:6px}
+.tldr ol{margin:0;padding-left:20px}.tldr li{margin:0 0 6px}
+article{padding:22px 0;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 12px}
+article .n{font:13px/1.9 var(--mono);color:var(--ink2);padding-top:2px}
+article h2{font-size:21px;line-height:1.2;margin:0;text-wrap:balance}
+article p{margin:8px 0 10px;max-width:66ch}
+blockquote{margin:0;padding:10px 14px;background:var(--paper);border:1px solid var(--rule);border-left:3px solid var(--ok);font:14px/1.5 var(--mono);color:var(--ink);overflow-wrap:anywhere}
+blockquote .lab{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok);margin-bottom:4px}
+.why{font-size:13px;color:var(--ink2);margin:6px 0 0}
+code{font-family:var(--mono);font-size:.9em;background:var(--accent-bg);padding:1px 4px;border-radius:3px}
+blockquote code{background:transparent;padding:0;font-weight:600}
+details{margin:18px 0;border:1px solid var(--rule);background:var(--paper);padding:10px 14px}
+summary{cursor:pointer;font:13px var(--mono);color:var(--accent)}
+details ul{margin:8px 0 0;padding-left:18px;font-size:15px}
+footer{margin-top:26px;padding-top:18px;border-top:2px solid var(--ink);font-size:15px;color:var(--ink2)}
+footer h3{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);margin:0 0 8px;font-family:var(--mono)}
+.flow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px;font:12.5px var(--mono)}
+.flow span{border:1px solid var(--rule);background:var(--paper);padding:4px 9px;border-radius:3px;color:var(--ink)}
+.flow .ai{border-color:var(--accent);color:var(--accent)}
+.flow i{align-self:center;font-style:normal;color:var(--ink2)}
+footer p{margin:0 0 8px;max-width:70ch}
+a{color:var(--accent)}
+@media(max-width:480px){article{grid-template-columns:1fr}article .n{display:none}}</style></head>
+<body><div class="wrap">
+<header>
+  <div class="eyebrow">ctaio.dev · practitioner brief · Claude Code 2.1.248 → 2.1.251</div>
+  <h1>Claude Code 2.1.248–2.1.251: sandbox hardening, a lockdown flag, and an hourly cache-miss fix</h1>
+  <div class="meta">
+    <span>Generated 2026-08-28</span>
+    <span>10 claims drafted</span>
+    <span class="ok">10 verified against the source</span>
+    <span>0 dropped</span>
+    <span>Gate: 100% ≥ 90%</span>
+  </div>
+</header>
+
+<div class="tldr"><div class="eyebrow">TL;DR</div><ol><li>2.1.251 is mostly a security patch round: symlink TOCTOU in file tools, plugin path traversal, and sandboxed Bash output files all get closed off, plus new approval gates on custom headers and gateway-adjacent settings.</li><li>2.1.248 adds <code>--restricted</code> for locking a session down to file-only tools, per-agent prompt-cache TTLs, and stops uploading uncommitted secrets (<code>.env</code>, <code>.tfvars</code>, key backups) to <code>/ultrareview</code> and cloud sessions.</li><li>2.1.250 shipped no user-facing changes — changelog just says 'Bug fixes and reliability improvements.'</li></ol></div>
+
+<article>
+  <div class="n">01</div>
+  <div>
+    <h2>Sandboxed Bash can no longer swap its own output file</h2>
+    <p>If you rely on the sandbox as an actual trust boundary rather than a suggestion, this closes a redirect/replace escape on command output — worth knowing if you were treating sandboxed output as untrusted-but-contained before.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Changed how Bash command output files are created and read back when commands run in the sandbox, so a sandboxed command cannot redirect or replace them</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim's framing as closing a redirect/replace escape does not overstate it.</p>
+  </div>
+</article>
+<article>
+  <div class="n">02</div>
+  <div>
+    <h2>Symlink-swap TOCTOU in Read/Write/Edit fixed</h2>
+    <p>A permission check that approves a path, followed by a symlink swap before the actual read/write, is a classic TOCTOU — this closes it for the three core file tools, relevant if agents run in directories a concurrent process can touch.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Fixed file tools (Read, Write, Edit) following a symlink swapped inside the working directory after the permission check, which could read or write outside the approved location</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; describing it as a TOCTOU fix accurately characterizes the described behavior.</p>
+  </div>
+</article>
+<article>
+  <div class="n">03</div>
+  <div>
+    <h2>Plugin marketplace commands can't point outside the plugin dir</h2>
+    <p>If you install third-party plugins from marketplaces, this is the fix that stops a malicious/misconfigured entry from referencing files outside its own directory — a path-traversal class bug, now a hard error instead of silent execution.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Fixed plugin commands declared in a marketplace entry being able to point outside the plugin directory; such paths are now rejected with a path-traversal error</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim accurately describes the path-traversal fix for marketplace plugin commands.</p>
+  </div>
+</article>
+<article>
+  <div class="n">04</div>
+  <div>
+    <h2>Custom headers that carry credentials now require approval</h2>
+    <p>If your org sets <code>ANTHROPIC_CUSTOM_HEADERS</code> via managed or project settings, an <code>Authorization</code> or <code>Host</code> override used to apply silently; now it prompts. Anticipate an approval dialog next time this setting changes.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Changed <code>ANTHROPIC_CUSTOM_HEADERS</code> from managed or project settings to require approval when it sets a credential, org/tenant, routing, or API-behavior header (e.g. <code>Authorization</code>, <code>Host</code>)</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim correctly notes this applies to managed/project settings sources.</p>
+  </div>
+</article>
+<article>
+  <div class="n">05</div>
+  <div>
+    <h2>CLAUDE_CODE_SUBAGENT_MODEL is now a default, not an override</h2>
+    <p>If you set this env var expecting it to force every subagent onto one model, it no longer wins over an agent's own <code>model:</code> field or a per-spawn model — check your fleet configs if you were depending on the old override behavior.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Changed <code>CLAUDE_CODE_SUBAGENT_MODEL</code> to set the default subagent model rather than override everything: an agent definition's <code>model:</code> and an explicit per-spawn model now take precedence over it</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim correctly states agent model: and per-spawn model now take precedence.</p>
+  </div>
+</article>
+<article>
+  <div class="n">06</div>
+  <div>
+    <h2><code>/effort</code> is now saved per model</h2>
+    <p>Switching between models used to carry one global effort setting; now each model remembers its own, useful if you run Opus at max effort but keep Sonnet lighter.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Changed <code>/effort</code> to save your default effort level per model, so each model keeps its own setting when you switch</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim accurately describes per-model effort persistence.</p>
+  </div>
+</article>
+<article>
+  <div class="n">07</div>
+  <div>
+    <h2><code>--restricted</code> flag locks a session to file tools only</h2>
+    <p>First real one-flag way to run an agent with no Bash/code-exec/WebFetch and no bypass-permissions escape hatch — the obvious choice for running an untrusted prompt or a CI job that should only touch files.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Added <code>--restricted</code> (or <code>CLAUDE_CODE_RESTRICTED=1</code>): removes the built-in tools that run commands or code and <code>WebFetch</code> (unless named in <code>--tools</code>), keeps file tools inside the working directory, refuses <code>bypassPermissions</code>, and ignores user, project and local settings files</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim accurately summarizes the restricted flag's effects.</p>
+  </div>
+</article>
+<article>
+  <div class="n">08</div>
+  <div>
+    <h2>Per-agent prompt-cache TTL in frontmatter</h2>
+    <p>Lets a specific subagent definition opt into a 5m or 1h cache TTL without touching global subagent TTL settings — relevant if some of your agents are long-running and others are short, bursty calls that shouldn't hold a 1h cache.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Added <code>experimental.cacheTtl</code> (<code>&quot;5m&quot;</code> or <code>&quot;1h&quot;</code>) to agent frontmatter: a per-agent prompt cache TTL used when no subagent TTL setting is configured</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim correctly notes it applies when no subagent TTL setting is configured.</p>
+  </div>
+</article>
+<article>
+  <div class="n">09</div>
+  <div>
+    <h2>Uncommitted secrets no longer leak into ultrareview/cloud uploads</h2>
+    <p>Previously, uncommitted <code>.env</code>/<code>.tfvars</code> edits and even editor swap/temp/backup files (<code>key.pem.tmp</code>, <code>id_rsa.swo</code>) could get shipped along with <code>/ultrareview</code> or a seeded cloud session. If you've run ultrareview on a repo with local secret files, this was live before 2.1.248.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Fixed <code>/ultrareview</code> and locally seeded cloud sessions uploading uncommitted edits to <code>prod.env</code>-style and <code>*.tfvars</code> files, or to editor swap, temp, and backup copies of credential files (e.g. <code>key.pem.tmp</code>, <code>id_rsa.swo</code>); they now stay on your machine</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim's added context about it being live before 2.1.248 is a reasonable inference from the fix description, not an overstatement.</p>
+  </div>
+</article>
+<article>
+  <div class="n">10</div>
+  <div>
+    <h2>Hourly prompt-cache miss in long sessions fixed</h2>
+    <p>Long-running sessions were silently eating a full cache miss (and losing extended-thinking context) roughly every hour due to tool definitions re-rendering after OAuth token refresh — a real cost/latency bug if you keep sessions open for hours.</p>
+    <blockquote><span class="lab">Verified · quoted from the changelog</span>Fixed a prompt-cache miss (and lost extended-thinking context) roughly once an hour in long sessions, caused by tool definitions being re-rendered after an OAuth token refresh</blockquote>
+    <p class="why">Verifier: Cite matches changelog verbatim; claim accurately restates the cache-miss and thinking-context loss cause.</p>
+  </div>
+</article>
+
+
+
+<footer>
+  <h3>How this brief was made</h3>
+  <div class="flow"><span>fetch</span><i>→</i><span class="ai">writer agent</span><i>→</i><span class="ai">verifier agent</span><i>→</i><span>code gate</span><i>→</i><span>publish</span></div>
+  <p>A writer agent drafted every item and had to quote the exact changelog line it used. A second agent, seeing only the source and the claims, marked each one supported or unsupported. Then plain code kept a claim only if the verifier passed it <em>and</em> its quote appears literally in the source, refused the run if any version number was not one of the fetched releases, and refused to publish below 90% support. On this run: 10 of 10 claims kept, 0 dropped, no invented versions.</p>
+  <p>Source: <a href="https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md">CHANGELOG.md</a> · Code: <a href="https://github.com/AtharvaRasal/ctaio-pipeline">AtharvaRasal/ctaio-pipeline</a> · Built by <a href="https://rasaltechsolutions.com">Rasal Tech Solutions</a></p>
+</footer>
+</div></body></html>

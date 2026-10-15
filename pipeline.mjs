@@ -3,6 +3,7 @@
 // Run: node pipeline.mjs   (needs: node 24+, claude CLI, curl)
 import { spawnSync, execSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { renderHtml } from "./render.mjs";
 
 const SRC = "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md";
 const VERSIONS = 3;                 // how many releases to cover
@@ -63,13 +64,7 @@ const support = kept.length / draft.items.length;
 log(`gate: ${kept.length}/${draft.items.length} supported (${(support * 100).toFixed(0)}%), badVersion=${!!badVersion}`);
 if (support < MIN_SUPPORT || badVersion) { log("GATE FAILED — not publishing"); process.exit(2); }
 
-// ---------- step 4: publish (render html) ----------
-const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const html = `<!doctype html><meta charset=utf-8><title>${esc(draft.title)}</title>
-<style>body{max-width:720px;margin:40px auto;font:16px/1.5 system-ui;padding:0 16px}blockquote{color:#555;border-left:3px solid #ddd;margin:4px 0 0;padding-left:10px;font-size:14px}small{color:#777}</style>
-<h1>${esc(draft.title)}</h1><small>Auto-generated ${new Date().toISOString().slice(0, 10)} · ${kept.length} claims, each fact-checked against the source by a second agent · ${draft.items.length - kept.length} dropped</small>
-<ul>${draft.tldr.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
-${kept.map(it => `<h3>${esc(it.heading)}</h3><p>${esc(it.why_it_matters)}</p><blockquote>${esc(it.cite)}</blockquote>`).join("")}
-<p><small>Pipeline: fetch → writer agent → verifier agent → code gate → publish. Source: <a href="${SRC}">CHANGELOG.md</a></small></p>`;
+// ---------- step 4: publish (render html, see render.mjs) ----------
+const html = renderHtml({ draft, verdicts, kept, source, versions, src: SRC, date: new Date().toISOString().slice(0, 10) });
 writeFileSync("out/index.html", html);
-log("wrote out/index.html");
+log(`wrote out/index.html (${kept.length} claims, ${draft.items.length - kept.length} dropped)`);
