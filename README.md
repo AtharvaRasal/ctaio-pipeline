@@ -10,6 +10,6 @@ Multi-agent content pipeline built for the ctaio.dev hiring task (28 Aug 2026, 4
 - `out/verifier.json` — agent 2's verdict per claim, seeing only source + claims.
 - `out/index.html` — published brief; deterministic gate drops unsupported claims and refuses to publish under 90% support or on any invented version number. Each published claim shows its quote and the verifier's reason.
 
-Live: https://ctaio-pipeline-atharvas-projects-2df492c2.vercel.app
+Live: https://ctaio-pipeline.vercel.app
 
 Run: `node pipeline.mjs` · Re-render only: `node render.mjs [date]`
